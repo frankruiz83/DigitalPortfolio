@@ -4,11 +4,10 @@ GRAD PORTION OF PROJECT
 Name: Francisco Ruiz
 
 1. This program took me approximately 3 hours to code. Further revisions gave me about another hour tacked on.
-2. Runtime is approximately 2 minutes (121 seconds).
-3. To process the web crawlers, I found the most prolific web crawlers and parsed though the file. When I came across 
-   the keywords I was looking for (e.g., Mozilla/5.0 for Googlebot), I captured from there to the end of the line
-   and inserted that into a vector.  If the same title was found multiple times, I incremented the counting vector
-   entry that corresponded to said bot.
+2. Runtime is approximately 4 minutes (243 seconds).
+3. To process the web crawlers, I searched for the filename "robots.txt".  All polite crawlers will ask for this file,
+   so this code may miss some, but all mainstream crawlers in the log should be found in the list.  If the same title 
+   was found multiple times, I incremented the counting vector entry that corresponded to said bot.
 */
 
 #include <ctime>
@@ -22,9 +21,88 @@ Name: Francisco Ruiz
 
 using namespace std;
 
-//This program will not be able to use a set since I will need to be able to track the number of times a particular
-//bot has accessed our server.  I will use two vectors to keep track of individual bots as well as the number of times
-//each has visited.  
+/*
+  This program will not be able to use a set since I will need to be able to track the number of times a particular
+  bot has accessed our server.  I will use two vectors to keep track of individual bots as well as the number of times
+  each has visited. In this program, I have parsed through the file once and moved all bots to a separate file, where 
+  they are processed again to check for unique visits.  This method may multi-count "inter-laced" crawler visits, but 
+  these cases should be few and far between.  
+*/
+
+//This process will be the second parsing, which operates on the already processed file.  It will tally up unique 
+//visit counts for each unique crawler visit.
+void final_process(string file_name)
+{
+	fstream f, g;
+	string temp, temp_address, ip_address, temp_id;
+	vector<string> all_ip;
+	vector<int> ip_count;
+
+	f.open(file_name, ios::in);
+
+	g.open("final_results.log", ios::out);
+
+	if(!f)
+	{
+		cout << "ERROR OPENING FILE FOR INPUT!" << endl;
+	}
+	else
+	{
+		while(!f.eof())
+		{
+			while(getline(f, temp))
+			{
+				stringstream sstr(temp);
+				
+				//This will get the ip address we need to check against the list of crawlers we have accumulated.
+				getline(sstr, ip_address, ' ');
+
+				//First case scenario
+				if(all_ip.empty())
+				{
+					all_ip.push_back(temp);
+					ip_count.push_back(1);
+				}
+				else
+				{
+					for(unsigned int i=0; i<all_ip.size(); i++)
+					{
+						//This second stringstream is necessary to pull the first word from the IP list we have
+						//accumulated, which will be the IP address.
+						stringstream sstr2(all_ip[i]);
+
+						getline(sstr2, temp_address, ' ');
+									
+						//If this IP address is found in the list already, it will increment the corresponding count
+						//entry in the counting vector and break from the loop, as it does not need to continue
+						//checking the rest of the list.
+						if(ip_address == temp_address)
+						{
+							ip_count[i]++;
+							break;
+						}
+						//If the IP address is not found in the list, it is considered unique and it is added to both vectors.
+						else if(i == all_ip.size() - 1)
+						{
+							all_ip.push_back(temp);
+							ip_count.push_back(1);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	f.close();
+
+	for(unsigned int j=0; j<all_ip.size(); j++)
+	{
+		g << ip_count[j] - 1 << "  " << all_ip[j] << endl;
+	}
+
+	g.close();
+}
+
 
 int main()
 {
@@ -57,58 +135,29 @@ int main()
 		{
 			stringstream sstr(temp);
 
-			//This line allows me to "pull" a word at a time from the line to check for popular bot ID's. If one is found,
-			//we will then check to make sure we have not encountered this particular bot before and then take the 
-			//appropriate action (either creating a new entry in our vector or updating the correct spot in the counting
-			//vector.
+			getline(sstr, word, ' ');
+
+			//This line allows me to "pull" a word at a time from the line to check for the "robots.txt" filename. 
+			//If one is found, we will then port the rest of the log text to a separate file for further processing.
 			while(getline(sstr, word, ' '))
 			{
-				//Most crawlers will reques the robots.txt file since it contains the behavior requested from crawlers 
-				//visiting the site. Some crawlers may not request the file, and in that case a 
-				//keyword search would be in order.
+				//Most legitimate crawlers will request the robots.txt file since it contains the behavior 
+				//requested from crawlers visiting the site. 
 				if(word == "/robots.txt")
 				{
-					//This series will make the bot_name the above "word" and then concatenate it to the end of the line.
-					getline(sstr, bot_name, '\n'); 
+					file_out << temp << endl;
+					break;
 				}
 			}
-
-			//This deals with the "first-case" scenario so that we don't get a bounds overflow. 
-			if(bots.empty())
-			{
-				bots.push_back(bot_name);
-				count.push_back(1);
-			}
-			else
-			{
-				//This will iterate through the existing bot list and check for repeats. If one is found, the corresponding 
-				//counts entry is iterated. Otherwise, the entry will be tacked onto the end of the vector.
-				for(unsigned int i=0; i<bots.size(); i++)
-				{
-					if(bot_name == bots[i])
-					{
-						count[i] += 1;
-						break;
-					}
-					else
-					{
-						bots.push_back(bot_name);
-						count.push_back(1);
-					}
-				}
-			}			
 		}
 	}
 	
 	file_in.close();
 
-	//This will display the results in the "results.log" file.
-	for(unsigned int j=0; j<bots.size(); j++)
-	{
-		file_out << count[j] << " " << bots[j] << endl;
-	}
-
 	file_out.close();
+
+	//Call to above function for processing of output file.
+	final_process("results.log");
 
 	//End of time monitoring. 
 	clock_t end_time = clock();
